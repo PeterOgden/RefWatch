@@ -126,8 +126,8 @@ static void draw_static(Layer* layer, GContext* ctx) {
 
 static void draw_game_data(Layer* layer, GContext* ctx) {
   
-  GFont score_font = fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD);
-  GFont quarter_font = fonts_get_system_font(FONT_KEY_GOTHIC_24);
+  GFont score_font = fonts_get_system_font(FONT_KEY_BITHAM_34_MEDIUM_NUMBERS);
+  GFont quarter_font = fonts_get_system_font(FONT_KEY_GOTHIC_28);
   graphics_context_set_text_color(ctx, GColorBlack);
   graphics_context_set_fill_color(ctx, GColorBlack);
   GRect bounds = layer_get_bounds(layer);
@@ -139,12 +139,12 @@ static void draw_game_data(Layer* layer, GContext* ctx) {
   // Draw away score
   snprintf(buffer, 4, "%d", game_data.away_score);
   graphics_draw_text(ctx, buffer, score_font, (GRect){
-      .origin = {.x = x_offset, . y = -3}, .size = {.h = 24, .w = width}
+      .origin = {.x = x_offset, . y = -3}, .size = {.h = 28, .w = width}
   }, GTextOverflowModeFill, GTextAlignmentCenter, NULL);
   
   for (int i = 0; i < game_data.away_timeouts; ++i) {
     graphics_fill_rect(ctx, (GRect) {
-      .origin = {.x = x_offset + i * 15 + 3, .y = 32}, .size = {.w = 13, .h = 4}
+      .origin = {.x = x_offset + i * 15 + 13, .y = 38}, .size = {.w = 13, .h = 4}
     }, 0, GCornerNone);
   }
   
@@ -152,17 +152,17 @@ static void draw_game_data(Layer* layer, GContext* ctx) {
   
   snprintf(buffer, 4, "%d", game_data.home_score);
   graphics_draw_text(ctx, buffer, score_font, (GRect){
-      .origin = {.x = x_offset, . y = -3}, .size = {.h = 24, .w = width}
+      .origin = {.x = x_offset, . y = -3}, .size = {.h = 28, .w = width}
   }, GTextOverflowModeFill, GTextAlignmentCenter, NULL);
   
   for (int i = 0; i < game_data.home_timeouts; ++i) {
     graphics_fill_rect(ctx, (GRect) {
-      .origin = {.x = x_offset + i * 15 + 3, .y = 32}, .size = {.w = 13, .h = 4}
+      .origin = {.x = x_offset + i * 15 + 13, .y = 38}, .size = {.w = 13, .h = 4}
     }, 0, GCornerNone);
   }
   
   graphics_draw_text(ctx, quarter_to_text(game_data.quarter), quarter_font, (GRect) {
-    .origin = {.x = 0, .y = 34}, .size = {.w = bounds.size.w, .h = 24}
+    .origin = {.x = 0, .y = 40}, .size = {.w = bounds.size.w, .h = 24}
   }, GTextOverflowModeFill, GTextAlignmentCenter, NULL);
 }
 
@@ -233,7 +233,7 @@ static void main_window_load(Window *window) {
   Layer* root_layer = window_get_root_layer(window);
   // Create static layer
   s_static_layer = layer_create((GRect){
-    .origin = {.x = 20, .y = 20}, .size = {.w = 104, .h = 15}
+    .origin = {.x = 5, .y = 5}, .size = {.w = 134, .h = 15}
   });
   layer_set_update_proc(s_static_layer, draw_static);
   // Add it as a child layer to the Window's root layer
@@ -241,7 +241,7 @@ static void main_window_load(Window *window) {
   layer_mark_dirty(s_static_layer);
   
   s_score_layer = layer_create((GRect) {
-    .origin = {.x = 20, .y = 35}, .size = {.w = 104, .h = 60}
+    .origin = {.x = 5, .y = 20}, .size = {.w = 134, .h = 70}
   });
   layer_set_update_proc(s_score_layer, draw_game_data);
   layer_add_child(root_layer, s_score_layer);
@@ -249,9 +249,9 @@ static void main_window_load(Window *window) {
   update_display();
   
   s_time_layer = text_layer_create((GRect){
-    .origin = {.x = 20, .y = 100}, .size = {.h = 36, .w = 104}
+    .origin = {.x = 5, .y = 90}, .size = {.h = 58, .w = 134}
   });
-  text_layer_set_font(s_time_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28));
+  text_layer_set_font(s_time_layer, fonts_get_system_font(FONT_KEY_BITHAM_42_MEDIUM_NUMBERS));
   text_layer_set_text_color(s_time_layer, GColorBlack);
   text_layer_set_text_alignment(s_time_layer, GTextAlignmentCenter);
   layer_add_child(root_layer, text_layer_get_layer(s_time_layer));
@@ -294,7 +294,7 @@ static void main_score(int index) {
   }
   else {
     game_data.away_score += points;
-    if (points != 6) game_list_add(&home_scores, points, game_data.quarter);
+    if (points != 6) game_list_add(&away_scores, points, game_data.quarter);
   }
   if (points == 6) game_data.try_active = true;
   update_display();
@@ -418,8 +418,8 @@ static void time_menu_click(int index) {
   switch (index) {
   case 0: seconds = 15*60; break;
   case 1: seconds = 25; break;
-  case 2: seconds = 60; break;
-  case 3: seconds = 60 * 10; break;
+  case 2: seconds = 90; break;
+  case 3: seconds = 60 * 20; break;
   }
   game_data.timer_reset_to = seconds;
   game_data.timer_running = false;
