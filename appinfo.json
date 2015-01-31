@@ -1,0 +1,19 @@
+{
+    "appKeys": {},
+    "capabilities": [
+        ""
+    ],
+    "companyName": "Peter Ogden",
+    "longName": "RefWatch",
+    "projectType": "native",
+    "resources": {
+        "media": []
+    },
+    "shortName": "RefWatch",
+    "uuid": "44456b2f-19ea-4c54-8c68-12f1a662b9a8",
+    "versionCode": 1,
+    "versionLabel": "1.0",
+    "watchapp": {
+        "watchface": false
+    }
+}
