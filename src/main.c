@@ -1,107 +1,7 @@
 #include <pebble.h>
-  
-enum TimeModes {
-  TIMER_GAME,
-  TIMER_PLAY_25,
-  TIMER_PLAY_40,
-  TIMER_TIMEOUT,
-  TIMER_HALF
-};
-  
-static struct GameData {
-  // Score information
-  uint16_t home_score;
-  uint16_t away_score;
-  uint8_t home_timeouts;
-  uint8_t away_timeouts;
-  uint8_t quarter;
-  
-  // Runtime information
-  bool home_team_active;
-  bool try_active;
-  
-  // Timer information
-  bool timer_running;
-  double timer_initial;
-  double timer_started;
-  uint16_t timer_reset_to;
-  
-} game_data;
+#include "GameData.h"
 
-typedef struct GameList_t {
-  uint8_t* data;
-  uint16_t size;
-  uint16_t capacity;
-} GameList;
-
-void game_list_init(GameList* list) {
-  list->data = malloc(1);
-  list->size = 0;
-  list->capacity = 1;
-}
-
-void game_list_free(GameList* list) {
-  free(list->data);
-}
-
-uint16_t game_list_size(GameList* list) {
-  return list->size;
-}
-
-void game_list_set_size(GameList* list, uint16_t size) {
-  uint16_t new_cap = list->capacity;
-  if (list->capacity == 0) new_cap = 1;
-  while (new_cap <= size) new_cap <<= 1;
-  list->data = realloc(list->data, new_cap);
-  list->size = size;
-}
-
-uint16_t game_list_total_score(GameList* list) {
-  uint16_t score = 0;
-  for (int i = 0; i < list->size; ++i) {
-    score += list->data[i] & 0x0F;
-  }
-  return score;
-}
-
-void game_list_add(GameList* list, uint8_t score, uint8_t quarter) {
-  if (list->size == list->capacity) {
-    uint16_t new_size = 1;
-    if (list->capacity != 0) new_size = list->capacity << 1;
-    list->data = realloc(list->data, new_size);
-  }
-  list->data[list->size++] = (quarter << 4) | score;
-}
-
-
-static const char* ordinals[] = {"1st", "2nd", "3rd", "4th", "Overtime"};
-static const char* quarter_to_text(uint8_t quarter) {
-  if (quarter < 4) return ordinals[quarter];
-  else return ordinals[4];
-}
-
-void game_list_text(GameList* list, uint8_t index, char* buffer, uint16_t size) {
-  uint8_t score = list->data[index] & 0x0F;
-  uint8_t quarter = list->data[index] >> 4;
-  snprintf(buffer, size, "%s - %d", quarter_to_text(quarter), score);
-}
-
-GameList home_scores;
-GameList away_scores;
-
-
-void game_data_reset() {
-  game_data.home_score = 0;
-  game_data.away_score = 0;
-  game_data.home_timeouts = 3;
-  game_data.away_timeouts = 3;
-  game_data.quarter = 0;
-  game_data.home_team_active = false;
-  game_data.try_active = false;
-  game_list_set_size(&home_scores, 0);
-  game_list_set_size(&away_scores, 0);
-}
-
+static GameData game_data;
 
 static Window *s_main_window;
 static Layer *s_static_layer;
@@ -123,43 +23,34 @@ static void draw_static(Layer* layer, GContext* ctx) {
   }, GTextOverflowModeFill, GTextAlignmentCenter, NULL);
 }
 
-
-static void draw_game_data(Layer* layer, GContext* ctx) {
-  
+static void draw_team_data(Layer* layer, GContext* ctx, TeamData* data, int x_offset, int width) {
   GFont score_font = fonts_get_system_font(FONT_KEY_BITHAM_34_MEDIUM_NUMBERS);
+  char buffer[4];
+  
+  snprintf(buffer, 4, "%d", data->total);
+  graphics_draw_text(ctx, buffer, score_font, (GRect){
+      .origin = {.x = x_offset, . y = -3}, .size = {.h = 28, .w = width}
+  }, GTextOverflowModeFill, GTextAlignmentCenter, NULL);
+  
+  for (int i = 0; i < data->timeouts; ++i) {
+    graphics_fill_rect(ctx, (GRect) {
+      .origin = {.x = x_offset + i * 15 + 13, .y = 38}, .size = {.w = 13, .h = 4}
+    }, 0, GCornerNone);
+  }
+  
+}
+
+static void draw_game_data(Layer* layer, GContext* ctx) {  
   GFont quarter_font = fonts_get_system_font(FONT_KEY_GOTHIC_28);
   graphics_context_set_text_color(ctx, GColorBlack);
   graphics_context_set_fill_color(ctx, GColorBlack);
   GRect bounds = layer_get_bounds(layer);
   
-  char buffer[4];
   int x_offset = 0;
   int width = bounds.size.w / 2;
-  
-  // Draw away score
-  snprintf(buffer, 4, "%d", game_data.away_score);
-  graphics_draw_text(ctx, buffer, score_font, (GRect){
-      .origin = {.x = x_offset, . y = -3}, .size = {.h = 28, .w = width}
-  }, GTextOverflowModeFill, GTextAlignmentCenter, NULL);
-  
-  for (int i = 0; i < game_data.away_timeouts; ++i) {
-    graphics_fill_rect(ctx, (GRect) {
-      .origin = {.x = x_offset + i * 15 + 13, .y = 38}, .size = {.w = 13, .h = 4}
-    }, 0, GCornerNone);
-  }
-  
-  x_offset = width;
-  
-  snprintf(buffer, 4, "%d", game_data.home_score);
-  graphics_draw_text(ctx, buffer, score_font, (GRect){
-      .origin = {.x = x_offset, . y = -3}, .size = {.h = 28, .w = width}
-  }, GTextOverflowModeFill, GTextAlignmentCenter, NULL);
-  
-  for (int i = 0; i < game_data.home_timeouts; ++i) {
-    graphics_fill_rect(ctx, (GRect) {
-      .origin = {.x = x_offset + i * 15 + 13, .y = 38}, .size = {.w = 13, .h = 4}
-    }, 0, GCornerNone);
-  }
+
+  draw_team_data(layer, ctx, &game_data.away, x_offset, width);
+  draw_team_data(layer, ctx, &game_data.home, width, width);
   
   graphics_draw_text(ctx, quarter_to_text(game_data.quarter), quarter_font, (GRect) {
     .origin = {.x = 0, .y = 40}, .size = {.w = bounds.size.w, .h = 24}
@@ -169,23 +60,9 @@ static void draw_game_data(Layer* layer, GContext* ctx) {
 static void start_timer();
 static void stop_timer();
 
-static void update_time() {
+static void update_time(void* ctx) {
   static char buffer[10];
-  int total_seconds;
-  if (game_data.timer_running) {
-    time_t seconds;
-    uint16_t milliseconds;
-    time_ms(&seconds, &milliseconds);
-    double current = seconds + (double)milliseconds/1000.0;
-    total_seconds = (int)(game_data.timer_started - current + game_data.timer_initial);
-  } else {
-    total_seconds = (int)game_data.timer_initial;
-  }
-  if (total_seconds < 0) {
-    stop_timer();
-    vibes_long_pulse();
-    total_seconds = 0;
-  }
+  uint16_t total_seconds = game_data_timer_get_value(&game_data);
   snprintf(buffer, 10, "%02d:%02d", total_seconds / 60, total_seconds % 60);
   text_layer_set_text(s_time_layer, buffer);
 }
@@ -194,39 +71,26 @@ static void update_display() {
   layer_mark_dirty(s_score_layer);
 }
 
-static AppTimer* timer;
-
-static void timer_handler(void* data) {
-  timer = app_timer_register(100, timer_handler, NULL);
-  update_time();
-}
-
-static void start_timer() {
-  if (game_data.timer_running) return;
-  game_data.timer_running = true;
-  if (game_data.timer_reset_to == 25) game_data.timer_initial = 25;
-  time_t seconds;
-  uint16_t milliseconds;
-  time_ms(&seconds, &milliseconds);
-  game_data.timer_started = seconds + (double)milliseconds/1000.0;
-  timer = app_timer_register(100, timer_handler, NULL);
+static void on_start(void* ctx) {
   text_layer_set_text_color(s_time_layer, GColorWhite);
   text_layer_set_background_color(s_time_layer, GColorBlack);
 }
 
-static void stop_timer() {
-  if (!game_data.timer_running) return;
-  game_data.timer_running = false;
-  time_t seconds;
-  uint16_t milliseconds;
-  time_ms(&seconds, &milliseconds);
-  double current = seconds + (double)milliseconds/1000.0;
-  double total_seconds = game_data.timer_started - current + game_data.timer_initial;
-  if (total_seconds < 0) total_seconds = 0.0;
-  game_data.timer_initial = total_seconds;
-  app_timer_cancel(timer);
+static void on_stop(void* ctx) {
   text_layer_set_text_color(s_time_layer, GColorBlack);
   text_layer_set_background_color(s_time_layer, GColorWhite);
+}
+
+static void on_expire(void* ctx) {
+  vibes_long_pulse();
+}
+
+static void start_timer() {
+  game_data_timer_start(&game_data);
+}
+
+static void stop_timer() {
+  game_data_timer_stop(&game_data);
 }
 
 static void main_window_load(Window *window) {
@@ -255,7 +119,8 @@ static void main_window_load(Window *window) {
   text_layer_set_text_color(s_time_layer, GColorBlack);
   text_layer_set_text_alignment(s_time_layer, GTextAlignmentCenter);
   layer_add_child(root_layer, text_layer_get_layer(s_time_layer));
-  update_time();
+  game_data_timer_set_callbacks(&game_data, on_start, on_stop, update_time, on_expire);
+  update_time(NULL);
 }
 
 static void main_window_unload(Window *window) {
@@ -288,14 +153,7 @@ static void main_score(int index) {
     case 1: points = 3; break;
     case 2: points = 2; break;
   }
-  if (game_data.home_team_active) {
-    game_data.home_score += points;
-    if (points != 6) game_list_add(&home_scores, points, game_data.quarter);
-  }
-  else {
-    game_data.away_score += points;
-    if (points != 6) game_list_add(&away_scores, points, game_data.quarter);
-  }
+  team_data_new_score(game_data.home_team_active?&game_data.home:&game_data.away, points, game_data.quarter);
   if (points == 6) game_data.try_active = true;
   update_display();
   window_stack_pop(false);
@@ -311,8 +169,8 @@ static void set_team_score(int index) {
 
 static void set_team_timeout(int index) {
   switch (index) {
-    case 0: game_data.home_timeouts--; break;
-    case 1: game_data.away_timeouts--; break;
+    case 0: game_data.home.timeouts--; break;
+    case 1: game_data.away.timeouts--; break;
   }
   window_stack_pop(false);
   update_display();
@@ -325,13 +183,7 @@ static void try_score(int index) {
     case 1: points = 1; break;
     case 2: points = 0; break;
   }
-  if (game_data.home_team_active) {
-    game_data.home_score += points;
-    game_list_add(&home_scores, 6 + points, game_data.quarter);
-  } else {
-    game_data.away_score += points;
-    game_list_add(&away_scores, 6 + points, game_data.quarter);
-  }
+  team_data_add_pat(game_data.home_team_active?&game_data.home:&game_data.away, points);
   game_data.try_active = false;
   update_display();
   window_stack_pop(false);
@@ -393,8 +245,8 @@ static void set_game_list_menu(GameList* list) {
 }
 
 static void show_team_score(int index) {
-  if (index == 0) set_game_list_menu(&home_scores);
-  else set_game_list_menu(&away_scores);
+  if (index == 0) set_game_list_menu(&game_data.home.scores);
+  else set_game_list_menu(&game_data.away.scores);
 }
 
 
@@ -403,13 +255,13 @@ static void main_menu_click(int index) {
     case 0: reset_menu(team_items, 2, set_team_timeout); break;
     case 1: 
       if (game_data.quarter++ == 1) {
-        game_data.home_timeouts = 3;
-        game_data.away_timeouts = 3;
+        game_data.home.timeouts = 3;
+        game_data.away.timeouts = 3;
       }
       window_stack_pop(false);
       break;
     case 2: reset_menu(team_items, 2, show_team_score); break;
-    case 3: game_data_reset(); update_display(); update_time(); window_stack_pop(false); break;
+    case 3: game_data_reset(&game_data); update_display(); window_stack_pop(false); break;
   }
 }
 
@@ -421,10 +273,8 @@ static void time_menu_click(int index) {
   case 2: seconds = 90; break;
   case 3: seconds = 60 * 20; break;
   }
-  game_data.timer_reset_to = seconds;
-  game_data.timer_running = false;
-  game_data.timer_initial = seconds;
-  update_time();
+  game_data_timer_set_reset(&game_data, seconds);
+  game_data_timer_reset(&game_data);
   window_stack_pop(false);
 }
 
@@ -468,7 +318,7 @@ static void down_long(ClickRecognizerRef re, void* ctx) {
 }
 
 static void down_click(ClickRecognizerRef re, void* ctx) {
-  if (game_data.timer_running) stop_timer();
+  if (game_data_timer_is_running(&game_data)) stop_timer();
   else start_timer();
 }
 
@@ -485,25 +335,11 @@ static const int AWAY_SCORE_KEY = 2;
 static void init() {
   APP_LOG(APP_LOG_LEVEL_ERROR, "In init");
   // Create the score vectors
-  game_list_init(&home_scores);
-  game_list_init(&away_scores);
+  game_data_init(&game_data);
   APP_LOG(APP_LOG_LEVEL_DEBUG, "Game list init");
   // Load data from persistent storage
-  if (persist_read_data(GAME_DATA_KEY, &game_data, sizeof(game_data)) != E_DOES_NOT_EXIST) {
-    APP_LOG(APP_LOG_LEVEL_DEBUG, "Loading persistent data");
-    game_list_set_size(&home_scores, game_data.home_score);
-    game_list_set_size(&away_scores, game_data.away_score);
-    persist_read_data(HOME_SCORE_KEY, home_scores.data, game_data.home_score);
-    persist_read_data(AWAY_SCORE_KEY, away_scores.data, game_data.away_score);
-    game_data.home_score = game_list_total_score(&home_scores);
-    game_data.away_score = game_list_total_score(&away_scores);
-    if (game_data.timer_running){
-      APP_LOG(APP_LOG_LEVEL_DEBUG, "Starting timer");
-      timer = app_timer_register(100, timer_handler, NULL);timer = app_timer_register(100, timer_handler, NULL);
-    }
-  } else {
-    APP_LOG(APP_LOG_LEVEL_DEBUG, "No persistent data");
-    game_data_reset();
+  if (!game_data_read(&game_data, GAME_DATA_KEY)) {
+    game_data_reset(&game_data);
   }
   APP_LOG(APP_LOG_LEVEL_DEBUG, "Creating windows");
   // Create main Window element and assign to pointer
@@ -531,18 +367,10 @@ static void init() {
 static void deinit() {
   // Destroy Window
   window_destroy(s_main_window);
+  game_data_write(&game_data, GAME_DATA_KEY);
   
-  game_data.home_score = game_list_size(&home_scores);
-  game_data.away_score = game_list_size(&away_scores);
-  persist_write_data(GAME_DATA_KEY, &game_data, sizeof(game_data));
-  persist_write_data(HOME_SCORE_KEY, home_scores.data, game_data.home_score);
-  persist_write_data(AWAY_SCORE_KEY, away_scores.data, game_data.away_score);
-  if (game_data.timer_running) {
-    app_timer_cancel(timer);
-  }
   // Free the score list
-  game_list_free(&home_scores);
-  game_list_free(&away_scores);
+  game_data_free(&game_data);
 }
 
 int main(void) {
