@@ -20,6 +20,9 @@ void game_data_reset(GameData* data) {
   data->away.total = 0;
   data->home.timeouts = 3;
   data->away.timeouts = 3;
+  data->quarter = 0;
+  data->try_active = false;
+  data->home_team_active = false;
   game_data_timer_reset(data);
 }
 

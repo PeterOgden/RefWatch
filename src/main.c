@@ -1,4 +1,5 @@
 #include <pebble.h>
+#include "ChoiceLayer.h"
 #include "GameData.h"
 
 static GameData game_data;
@@ -10,6 +11,17 @@ static TextLayer *s_time_layer;
 
 static Window* s_menu_window;
 static MenuLayer* s_menu_layer;
+
+static Window* s_choice_window;
+static ChoiceLayer* s_choice_layer;
+
+static void back_to_main() {
+  Window* current = window_stack_get_top_window();
+  while (current && current != s_main_window) {
+    window_stack_pop(false);
+    current = window_stack_get_top_window();
+  }
+}
 
 static void draw_static(Layer* layer, GContext* ctx) {
   GFont team_font = fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD);
@@ -130,12 +142,12 @@ static void main_window_unload(Window *window) {
   text_layer_destroy(s_time_layer);
 }
 
-typedef void (*MenuCallback)(int index);
-static void reset_menu(const char** text, int number, MenuCallback callback);
+typedef void (*MenuCallback)(void* data, int index);
+static void show_menu(const char** text, int number, MenuCallback callback);
 
 static const char* main_scores_items[] = {"Touchdown", "Field Goal", "Safety"};
 static const char* try_scores_items[] = {"2-point", "1-point", "Failed"};
-static const char* team_items[] = {"Home Team", "Away Team"};
+static const char* team_items[] = {"Home Team", "Away Team", "Cancel"};
 
 static const char* main_menu_items[] = {"Timeout", "End Quarter", "View Scores", "Reset Game"};
 static const char* time_menu_items[] = {"Game Clock", "Play Clock", "Timeout", "Half"};
@@ -146,7 +158,7 @@ static int current_menu_number = 3;
 static MenuCallback current_menu_callback;
 
 
-static void main_score(int index) {
+static void main_score(void* data, int index) {
   uint8_t points = 0;
   switch (index) {
     case 0: points = 6; break;
@@ -156,27 +168,31 @@ static void main_score(int index) {
   team_data_new_score(game_data.home_team_active?&game_data.home:&game_data.away, points, game_data.quarter);
   if (points == 6) game_data.try_active = true;
   update_display();
-  window_stack_pop(false);
+  back_to_main();
 }
 
-static void set_team_score(int index) {
+static void set_team_score(void* data, int index) {
+  if (index == 2) { 
+    back_to_main();
+    return;
+  }
   game_data.home_team_active = index == 0;
   current_menu_text = main_scores_items;
   current_menu_number = 3;
   current_menu_callback = main_score;
-  reset_menu(main_scores_items, 3, main_score);
+  show_menu(main_scores_items, 3, main_score);
 }
 
-static void set_team_timeout(int index) {
+static void set_team_timeout(void* data, int index) {
   switch (index) {
     case 0: game_data.home.timeouts--; break;
     case 1: game_data.away.timeouts--; break;
   }
-  window_stack_pop(false);
+  back_to_main();
   update_display();
 }
 
-static void try_score(int index) {
+static void try_score(void* data, int index) {
   uint8_t points = 0;
   switch (index) {
     case 0: points = 2; break;
@@ -186,7 +202,7 @@ static void try_score(int index) {
   team_data_add_pat(game_data.home_team_active?&game_data.home:&game_data.away, points);
   game_data.try_active = false;
   update_display();
-  window_stack_pop(false);
+  back_to_main();
 }
 
 static uint16_t get_menu_rows_number(MenuLayer* layer, uint16_t section, void* data) {
@@ -198,74 +214,106 @@ static void draw_menu_row(GContext* ctx, const Layer* cell_layer, MenuIndex* ind
 }
 
 static void menu_click(MenuLayer* layer, MenuIndex* index, void* data) {
-  current_menu_callback(index->row);
+  current_menu_callback(NULL, index->row);
+}
+
+static uint16_t data_num_sections(MenuLayer* layer, void* context) {
+  return 2;
+}
+
+static int16_t data_header_height(MenuLayer* layer, uint16_t index, void* context) {
+  return 20;
+}
+
+static void data_draw_header(GContext* ctx, const Layer* layer, uint16_t index, void* callback) {
+  menu_cell_basic_header_draw(ctx, layer, index?"Away":"Home");
 }
 
 static uint16_t games_list_menu_rows_number(MenuLayer* layer, uint16_t section, void* data) {
-  return game_list_size((GameList*)data);
+  GameList* list = section == 0?&game_data.home.scores: &game_data.away.scores;
+  return game_list_size(list);
 }
 
 static void games_list_draw_menu_row(GContext* ctx, const Layer* cell_layer, MenuIndex* index, void* data) {
+  GameList* list = index->section == 0?&game_data.home.scores: &game_data.away.scores;
   static char buffer[10];
-  game_list_text((GameList*)data, index->row, buffer, 10);
+  game_list_text(list, index->row, buffer, 10);
   menu_cell_basic_draw(ctx, cell_layer, buffer, NULL, NULL);
 }
 
 static void games_list_menu_click(MenuLayer* layer, MenuIndex* index, void* data) {
-  window_stack_pop(false);
+  back_to_main();
 }
 
 
 
-static void reset_menu(const char** text, int number, MenuCallback callback) {
+static void show_menu(const char** text, int number, MenuCallback callback) {
   current_menu_text = text;
   current_menu_number = number;
   current_menu_callback = callback;
+  if (number <= 3) {
+    if (window_is_loaded(s_choice_window)) {
+      choicelayer_set_choices(s_choice_layer, text);
+      choicelayer_set_callback(s_choice_layer, callback, NULL);
+    }
+    if (window_stack_get_top_window() != s_choice_window) {
+      window_stack_push(s_choice_window, true);
+      window_stack_remove(s_menu_window, false);
+    }
+  } else {
+    if (window_is_loaded(s_menu_window)) {
+      menu_layer_set_callbacks(s_menu_layer, NULL, (MenuLayerCallbacks) {
+        .get_num_rows = get_menu_rows_number,
+        .draw_row = draw_menu_row,
+        .select_click = menu_click
+      });
+      MenuIndex index;
+      index.row = 0;
+      index.section = 0;
+      menu_layer_set_selected_index(s_menu_layer, index, MenuRowAlignTop, false);
+    }
+    if (window_stack_get_top_window() != s_menu_window){
+      window_stack_push(s_menu_window, true); 
+      window_stack_remove(s_choice_window, false);
+    } 
+  }
+}
+
+static void set_game_list_menu() {
   if (window_is_loaded(s_menu_window)) {
     menu_layer_set_callbacks(s_menu_layer, NULL, (MenuLayerCallbacks) {
-      .get_num_rows = get_menu_rows_number,
-      .draw_row = draw_menu_row,
-      .select_click = menu_click
-    });
-    MenuIndex index;
-    index.row = 0;
-    index.section = 0;
-    menu_layer_set_selected_index(s_menu_layer, index, MenuRowAlignTop, false);
-  }
-}
-
-static void set_game_list_menu(GameList* list) {
-  if (window_is_loaded(s_menu_window)) {
-    menu_layer_set_callbacks(s_menu_layer, list, (MenuLayerCallbacks) {
       .get_num_rows = games_list_menu_rows_number,
       .draw_row = games_list_draw_menu_row,
-      .select_click = games_list_menu_click
+      .select_click = games_list_menu_click,
+      .draw_header = data_draw_header,
+      .get_num_sections = data_num_sections,
+      .get_header_height = data_header_height
     });
   }
 }
 
-static void show_team_score(int index) {
-  if (index == 0) set_game_list_menu(&game_data.home.scores);
-  else set_game_list_menu(&game_data.away.scores);
+static void show_team_score(void* data, int index) {
+  set_game_list_menu();
 }
 
+static void set_game_list_menu();
 
-static void main_menu_click(int index) {
+static void main_menu_click(void* data, int index) {
   switch (index) {
-    case 0: reset_menu(team_items, 2, set_team_timeout); break;
+    case 0: show_menu(team_items, 2, set_team_timeout); break;
     case 1: 
       if (game_data.quarter++ == 1) {
         game_data.home.timeouts = 3;
         game_data.away.timeouts = 3;
       }
-      window_stack_pop(false);
+      back_to_main();
       break;
-    case 2: reset_menu(team_items, 2, show_team_score); break;
+    case 2: set_game_list_menu(); break;
     case 3: game_data_reset(&game_data); update_display(); window_stack_pop(false); break;
   }
 }
 
-static void time_menu_click(int index) {
+static void time_menu_click(void* data, int index) {
   int seconds = 0;
   switch (index) {
   case 0: seconds = 15*60; break;
@@ -297,24 +345,31 @@ static void menu_window_unload(Window* window) {
   menu_layer_destroy(s_menu_layer);
 }
 
+static void choice_window_load(Window* window) {
+  s_choice_layer = choicelayer_create_from_window(window);
+  choicelayer_set_callback(s_choice_layer, current_menu_callback, NULL);
+  choicelayer_set_choices(s_choice_layer, current_menu_text);
+  layer_add_child(window_get_root_layer(window), choicelayer_get_layer(s_choice_layer));
+}
+
+static void choice_window_unload(Window* window) {
+  choicelayer_destroy(s_choice_layer);
+}
+
 static void up_click(ClickRecognizerRef re, void* ctx) {
   if (game_data.try_active) {
-    reset_menu(try_scores_items, 3, try_score);
+    show_menu(try_scores_items, 3, try_score);
   } else {
-    reset_menu(team_items, 2, set_team_score);
+    show_menu(team_items, 2, set_team_score);
   }
-  if (window_is_loaded(s_menu_window)) menu_layer_reload_data(s_menu_layer);
-  window_stack_push(s_menu_window, true);
 }
 
 static void middle_click(ClickRecognizerRef re, void* ctx) {
-  reset_menu(main_menu_items, 4, main_menu_click);
-  window_stack_push(s_menu_window, true);
+  show_menu(main_menu_items, 4, main_menu_click);
 }
 
 static void down_long(ClickRecognizerRef re, void* ctx) {
-  reset_menu(time_menu_items, 4, time_menu_click);
-  window_stack_push(s_menu_window, true);
+  show_menu(time_menu_items, 4, time_menu_click);
 }
 
 static void down_click(ClickRecognizerRef re, void* ctx) {
@@ -345,6 +400,8 @@ static void init() {
   // Create main Window element and assign to pointer
   s_main_window = window_create();
   s_menu_window = window_create();
+  s_choice_window = window_create();
+  
   APP_LOG(APP_LOG_LEVEL_DEBUG, "Set Handlers");
   // Set handlers to manage the elements inside the Window
   window_set_window_handlers(s_main_window, (WindowHandlers) {
@@ -355,6 +412,11 @@ static void init() {
   window_set_window_handlers(s_menu_window, (WindowHandlers) {
     .load = menu_window_load,
     .unload = menu_window_unload
+  });
+  
+  window_set_window_handlers(s_choice_window, (WindowHandlers) {
+    .load = choice_window_load,
+    .unload = choice_window_unload
   });
   APP_LOG(APP_LOG_LEVEL_DEBUG, "Set click providers");
   window_set_click_config_provider(s_main_window, configure_click);
@@ -367,6 +429,8 @@ static void init() {
 static void deinit() {
   // Destroy Window
   window_destroy(s_main_window);
+  window_destroy(s_menu_window);
+  window_destroy(s_choice_window);
   game_data_write(&game_data, GAME_DATA_KEY);
   
   // Free the score list
