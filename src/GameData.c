@@ -4,6 +4,8 @@
 void game_data_init(GameData* data) {
   game_list_init(&data->home.scores);
   game_list_init(&data->away.scores);
+  game_list_init(&data->home.penalties);
+  game_list_init(&data->away.penalties);
 }
 void game_data_free(GameData* data) {
   if (data->timer_callbacks.timer) {
@@ -12,10 +14,14 @@ void game_data_free(GameData* data) {
   }
   game_list_free(&data->home.scores);
   game_list_free(&data->away.scores);
+  game_list_free(&data->home.penalties);
+  game_list_free(&data->away.penalties);
 }
 void game_data_reset(GameData* data) {
   game_list_clear(&data->home.scores);
   game_list_clear(&data->away.scores);
+  game_list_clear(&data->home.penalties);
+  game_list_clear(&data->away.penalties);
   data->home.total = 0;
   data->away.total = 0;
   data->home.timeouts = 3;
@@ -26,7 +32,7 @@ void game_data_reset(GameData* data) {
   game_data_timer_reset(data);
 }
 
-static const uint32_t STORAGE_VERSION = 1;
+static const uint32_t STORAGE_VERSION = 3;
 
 typedef struct GameDataStorage_t {
   uint32_t version;
@@ -52,6 +58,8 @@ bool game_data_read(GameData* data, uint32_t key) {
   data->home_team_active = storage.home_team_active;
   game_list_read(&data->home.scores, key + 1);
   game_list_read(&data->away.scores, key + 2);
+  game_list_read(&data->home.penalties, key + 3);
+  game_list_read(&data->away.penalties, key + 4);
   data->home.total = game_list_total_score(&data->home.scores);
   data->away.total = game_list_total_score(&data->away.scores);
   
@@ -79,6 +87,8 @@ void game_data_write(GameData* data, uint32_t key) {
   persist_write_data(key, &storage, sizeof(storage));
   game_list_write(&data->home.scores, key + 1);
   game_list_write(&data->away.scores, key + 2);
+  game_list_write(&data->home.penalties, key + 3);
+  game_list_write(&data->away.penalties, key + 4);
 }
 static double time_double() {
   time_t seconds;
@@ -158,9 +168,9 @@ bool game_data_timer_is_running(GameData* data) {
   return data->timer.running;
 }
 
-void team_data_new_score(TeamData* data, uint8_t score, uint8_t quarter) {
+void team_data_new_score(TeamData* data, uint8_t score, uint8_t quarter, uint8_t time) {
   data->total += score;
-  game_list_add(&data->scores, score, quarter);
+  game_list_add(&data->scores, score, quarter, time);
 }
 void team_data_add_pat(TeamData* data, uint8_t score) {
   data->total += score;

@@ -3,6 +3,7 @@
 
 typedef struct TeamData_t {
   GameList scores;
+  GameList penalties;
   uint16_t total;
   uint8_t timeouts;
 } TeamData;
@@ -40,6 +41,9 @@ typedef struct GameData_t {
   
 } GameData;
 
+static const int SCORE_OFFSET = offsetof(TeamData, scores);
+static const int PENALTY_OFFSET = offsetof(TeamData, penalties);
+
 void game_data_init(GameData* data);
 void game_data_free(GameData* data);
 void game_data_reset(GameData* data);
@@ -57,6 +61,9 @@ void game_data_timer_set_callbacks(GameData* data,
           TimerCallback start, TimerCallback stop, TimerCallback tick, TimerCallback expire);
 bool game_data_timer_is_running(GameData* data);
 
-void team_data_new_score(TeamData* data, uint8_t score, uint8_t quarter);
+void team_data_new_score(TeamData* data, uint8_t score, uint8_t quarter, uint8_t time);
 void team_data_add_pat(TeamData* data, uint8_t score);
+
+void team_data_add_penalty(TeamData* data, uint8_t number, uint8_t quarter, uint8_t time);
+void team_data_add_timeout(TeamData* data, uint8_t number, uint8_t quarter, uint8_t time);
 
