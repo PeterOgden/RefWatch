@@ -1,6 +1,8 @@
 #include <pebble.h>
 #include "GameList.h"
 
+static const int BYTES_PER_ENTRY = 2;
+  
 void game_list_init(GameList* list) {
   list->data = calloc(2, 1);
   list->size = 0;
@@ -19,11 +21,16 @@ bool game_list_empty(GameList* list) {
   return list->size == 0;
 }
 
-static void game_list_set_size(GameList* list, uint16_t size) {
+static void game_list_grow(GameList* list, uint16_t size) {
   uint16_t new_cap = list->capacity;
   if (list->capacity == 0) new_cap = 1;
   while (new_cap <= size) new_cap <<= 1;
-  list->data = realloc(list->data, new_cap * 2);
+  list->data = realloc(list->data, new_cap * BYTES_PER_ENTRY);
+  list->capacity = new_cap;
+}
+
+static void game_list_set_size(GameList* list, uint16_t size) {
+  if (size > list->capacity) game_list_grow(list, size);
   list->size = size;
 }
 
@@ -37,9 +44,7 @@ uint16_t game_list_total_score(GameList* list) {
 
 void game_list_add(GameList* list, uint8_t value, uint8_t quarter, uint16_t time) {
   if (list->size == list->capacity) {
-    uint16_t new_size = 1;
-    if (list->capacity != 0) new_size = list->capacity << 1;
-    list->data = realloc(list->data, new_size);
+    game_list_grow(list, list->size + 1);
   }
   list->data[list->size++] = (quarter << 8) | value;
 }

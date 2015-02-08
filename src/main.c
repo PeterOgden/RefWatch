@@ -223,6 +223,7 @@ static void penalty_select(NumberWindow* window, void* data) {
   game_list_add(&new_team->penalties, number_window_get_value(s_number_window), game_data.quarter, 0);
   back_to_main();
 }
+static int new_index;
 
 static void set_team_new(void* data, int index) {
   switch (index) {
@@ -230,9 +231,26 @@ static void set_team_new(void* data, int index) {
     case 1: new_team = &game_data.away; break;
     case 2: back_to_main(); return;
   }
-  show_menu(new_items, 3, select_new);
+  switch (new_index) {
+    case 0:
+      game_data.home_team_active = new_team == &game_data.home;
+      if (game_data.try_active) {
+        show_menu(try_scores_items, 3, try_score);
+      } else {
+        show_menu(main_scores_items, 3, main_score);
+      }
+      break;
+    case 1: 
+      window_stack_push(number_window_get_window(s_number_window), true);
+      break;
+    case 2: new_team->timeouts--; back_to_main(); break;
+  }
 }
 
+static void set_new_item(void* data, int index) {
+  new_index = index;
+  show_menu(team_items, 3, set_team_new);
+}
 static uint16_t get_menu_rows_number(MenuLayer* layer, uint16_t section, void* data) {
   return current_menu_number;
 }
@@ -342,7 +360,7 @@ static void set_game_list_menu();
 
 static void main_menu_click(void* data, int index) {
   switch (index) {
-    case 0: show_menu(team_items, 2, set_team_new); break;
+    case 0: show_menu(new_items, 3, set_new_item); break;
     case 1: show_menu(view_items, 3, view_menu_click); break;
     case 2: game_data_reset(&game_data); update_display(); window_stack_pop(false); break;
   }
