@@ -1,7 +1,8 @@
 #include <pebble.h>
 #include "ChoiceLayer.h"
 #include "GameData.h"
-
+#include "AppConfig.h"
+  
 static GameData game_data;
 
 static Window *s_main_window;
@@ -369,11 +370,12 @@ static void main_menu_click(void* data, int index) {
 static void clock_menu_click(void* data, int index) {
   int seconds = 0;
   switch (index) {
-  case 0: seconds = 15*60; break;
-  case 1: seconds = 25; break;
+  case 0: seconds = app_config.game_clock; break;
+  case 1: seconds = app_config.play_clock; break;
   case 2: seconds = 90; break;
   case 3: seconds = 60 * 20; break;
   }
+  game_data.play_clock = index == 1?1:0;
   game_data_timer_set_reset(&game_data, seconds);
   game_data_timer_reset(&game_data);
   window_stack_pop(false);
@@ -384,8 +386,8 @@ static void time_menu_click(void* data, int index) {
     case 0: game_data_timer_reset(&game_data); back_to_main(); break;
     case 1: 
       if (game_data.quarter++ == 1) {
-        game_data.home.timeouts = 3;
-        game_data.away.timeouts = 3;
+        game_data.home.timeouts = app_config.timeouts;
+        game_data.away.timeouts = app_config.timeouts;
       }
       back_to_main();
       break;
@@ -440,8 +442,23 @@ static void down_long(ClickRecognizerRef re, void* ctx) {
 }
 
 static void down_click(ClickRecognizerRef re, void* ctx) {
-  if (game_data_timer_is_running(&game_data)) stop_timer();
-  else start_timer();
+  if (game_data_timer_is_running(&game_data)) {
+    if (game_data.play_clock == 1 && app_config.post_snap) {
+      game_data.play_clock = 2;
+      game_data_timer_set_reset(&game_data, app_config.post_snap);
+      game_data_timer_reset(&game_data);
+      start_timer();
+    } else {
+      stop_timer();
+    }
+  } else {
+    if (game_data.play_clock) {
+      game_data.play_clock = 1;
+      game_data_timer_set_reset(&game_data, app_config.play_clock);
+      game_data_timer_reset(&game_data);
+    }
+    start_timer();
+  }
 }
 
 static void configure_click(void* ctx) {
@@ -450,12 +467,20 @@ static void configure_click(void* ctx) {
   window_single_click_subscribe(BUTTON_ID_DOWN, down_click);
   window_long_click_subscribe(BUTTON_ID_DOWN, 1000, down_long, NULL);
 }
+
+static void inbox_message(DictionaryIterator* iterator, void* context) {
+  app_config_reload(iterator);
+}
+
 static const int GAME_DATA_KEY = 0;
 static const int HOME_SCORE_KEY = 1;
 static const int AWAY_SCORE_KEY = 2;
 
 static void init() {
   APP_LOG(APP_LOG_LEVEL_ERROR, "In init");
+  app_config_init();
+  app_message_register_inbox_received(inbox_message);
+  app_message_open(124,124);
   // Create the score vectors
   game_data_init(&game_data);
   APP_LOG(APP_LOG_LEVEL_DEBUG, "Game list init");
@@ -496,6 +521,7 @@ static void init() {
 }
 
 static void deinit() {
+  app_message_deregister_callbacks();
   // Destroy Window
   window_destroy(s_main_window);
   window_destroy(s_menu_window);

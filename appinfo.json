@@ -1,7 +1,13 @@
 {
-    "appKeys": {},
+    "appKeys": {
+        "GAME_CLOCK": 1,
+        "PERIODS": 4,
+        "PLAY_CLOCK": 2,
+        "POST_SNAP": 5,
+        "TIMEOUTS": 3
+    },
     "capabilities": [
-        ""
+        "configurable"
     ],
     "companyName": "Peter Ogden",
     "longName": "RefWatch",

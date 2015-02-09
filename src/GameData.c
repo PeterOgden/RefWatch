@@ -1,6 +1,7 @@
 #include <pebble.h>
 #include "GameData.h"
-
+#include "AppConfig.h"
+  
 void game_data_init(GameData* data) {
   game_list_init(&data->home.scores);
   game_list_init(&data->away.scores);
@@ -24,15 +25,15 @@ void game_data_reset(GameData* data) {
   game_list_clear(&data->away.penalties);
   data->home.total = 0;
   data->away.total = 0;
-  data->home.timeouts = 3;
-  data->away.timeouts = 3;
+  data->home.timeouts = app_config.timeouts;
+  data->away.timeouts = app_config.timeouts;
   data->quarter = 0;
   data->try_active = false;
   data->home_team_active = false;
   game_data_timer_reset(data);
 }
 
-static const uint32_t STORAGE_VERSION = 3;
+static const uint32_t STORAGE_VERSION = 4;
 
 typedef struct GameDataStorage_t {
   uint32_t version;
@@ -42,6 +43,7 @@ typedef struct GameDataStorage_t {
   uint8_t quarter;
   uint8_t try_active;
   uint8_t home_team_active;
+  uint8_t play_clock;
 } GameDataStorage;
 
 bool game_data_read(GameData* data, uint32_t key) {
@@ -56,6 +58,7 @@ bool game_data_read(GameData* data, uint32_t key) {
   data->quarter = storage.quarter;
   data->try_active = storage.try_active;
   data->home_team_active = storage.home_team_active;
+  data->play_clock = storage.play_clock;
   game_list_read(&data->home.scores, key + 1);
   game_list_read(&data->away.scores, key + 2);
   game_list_read(&data->home.penalties, key + 3);
@@ -82,7 +85,8 @@ void game_data_write(GameData* data, uint32_t key) {
     data->away.timeouts,
     data->quarter,
     data->try_active,
-    data->home_team_active
+    data->home_team_active,
+    data->play_clock
   };
   persist_write_data(key, &storage, sizeof(storage));
   game_list_write(&data->home.scores, key + 1);

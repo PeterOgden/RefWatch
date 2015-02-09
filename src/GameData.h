@@ -39,6 +39,8 @@ typedef struct GameData_t {
   Timer timer;
   TimerInternal timer_callbacks;
   
+  uint8_t play_clock;
+  
 } GameData;
 
 static const int SCORE_OFFSET = offsetof(TeamData, scores);
