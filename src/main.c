@@ -17,7 +17,11 @@ static Window* s_choice_window;
 static ChoiceLayer* s_choice_layer;
 
 static NumberWindow* s_number_window;
-
+int16_t ceil_int(double val) {
+  int16_t ret = (int16_t) val;
+  if (val - ret != 0) ++ret;
+  return ret;
+}
 static void back_to_main() {
   Window* current = window_stack_get_top_window();
   while (current && current != s_main_window) {
@@ -77,7 +81,7 @@ static void stop_timer();
 
 static void update_time(void* ctx) {
   static char buffer[10];
-  uint16_t total_seconds = game_data_timer_get_value(&game_data);
+  uint16_t total_seconds = ceil_int(game_data_timer_get_value(&game_data));
   snprintf(buffer, 10, "%02d:%02d", total_seconds / 60, total_seconds % 60);
   text_layer_set_text(s_time_layer, buffer);
 }
@@ -97,6 +101,7 @@ static void on_stop(void* ctx) {
 }
 
 static void on_expire(void* ctx) {
+  update_time(ctx);
   vibes_long_pulse();
 }
 
@@ -385,7 +390,7 @@ static void time_menu_click(void* data, int index) {
   switch (index) {
     case 0: game_data_timer_reset(&game_data); back_to_main(); break;
     case 1: 
-      if (game_data.quarter++ == 1) {
+      if (++game_data.quarter == app_config.periods / 2) {
         game_data.home.timeouts = app_config.timeouts;
         game_data.away.timeouts = app_config.timeouts;
       }
@@ -469,7 +474,10 @@ static void configure_click(void* ctx) {
 }
 
 static void inbox_message(DictionaryIterator* iterator, void* context) {
-  app_config_reload(iterator);
+  if (app_config_reload(iterator)) {
+    game_data_reset(&game_data);
+    update_display();
+  }
 }
 
 static const int GAME_DATA_KEY = 0;

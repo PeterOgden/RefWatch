@@ -1,6 +1,6 @@
 #include <pebble.h>
 #include "GameList.h"
-
+#include "AppConfig.h"
 static const int BYTES_PER_ENTRY = 2;
   
 void game_list_init(GameList* list) {
@@ -60,7 +60,7 @@ void game_list_clear(GameList* list) {
 
 static const char* ordinals[] = {"1st", "2nd", "3rd", "4th", "Overtime"};
 const char* quarter_to_text(uint8_t quarter) {
-  if (quarter < 4) return ordinals[quarter];
+  if (quarter < app_config.periods) return ordinals[quarter];
   else return ordinals[4];
 }
 

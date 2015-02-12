@@ -13,4 +13,4 @@ typedef struct AppConfig_t {
 extern AppConfig app_config;
 
 void app_config_init();
-void app_config_reload(DictionaryIterator* iterator);
+bool app_config_reload(DictionaryIterator* iterator);

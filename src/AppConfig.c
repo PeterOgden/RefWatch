@@ -30,10 +30,11 @@ void app_config_init() {
 #define TIMEOUTS 3
 #define PERIODS 4
 #define POST_SNAP 5
+#define RESET 6
 
-void app_config_reload(DictionaryIterator* iterator) {
+bool app_config_reload(DictionaryIterator* iterator) {
   APP_LOG(APP_LOG_LEVEL_DEBUG, "Starting reload");
-  app_config_default();
+  bool reset = false;
   Tuple* t = dict_read_first(iterator);
   while (t != NULL) {
     switch(t->key) {
@@ -42,9 +43,11 @@ void app_config_reload(DictionaryIterator* iterator) {
     case TIMEOUTS: app_config.timeouts = t->value->uint8; break;
     case PERIODS: app_config.periods = t->value->uint8; break;
     case POST_SNAP: app_config.post_snap = t->value->uint8; break;
+    case RESET: reset = true; break;
     default: break;
     }
     t = dict_read_next(iterator);
   }
   persist_write_data(CONFIG_KEY, &app_config, sizeof(AppConfig));
+  return reset;
 }
